@@ -14,10 +14,10 @@ Tunnel TCP traffic through Telegram messages. A local SOCKS5 proxy encodes your 
 
 Talk to [@BotFather](https://t.me/BotFather), create two bots, save both tokens.
 
-### 2. Create a Telegram group
+### 2. Create a Telegram channel
 
-Add both bots to a group. Get the group's chat ID (it's a negative integer like `-1001234567890`).
-You can get it by adding [@userinfobot](https://t.me/userinfobot) to the group temporarily.
+Add both bots to a channel. Get the channel's chat ID (it's a negative integer like `-1001234567890`).
+You can get it by adding [@userinfobot](https://t.me/userinfobot) to the channel temporarily.
 
 ### 3. Build
 

@@ -1,6 +1,7 @@
 package socks5
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -22,16 +23,25 @@ func New(addr string, logger *slog.Logger, handler func(net.Conn, ConnectRequest
 	return &Server{addr: addr, logger: logger, handler: handler}
 }
 
-func (s *Server) ListenAndServe() error {
+func (s *Server) ListenAndServe(ctx context.Context) error {
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", s.addr, err)
 	}
 	s.logger.Info("SOCKS5 listening", "addr", s.addr)
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			return fmt.Errorf("accept: %w", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				return fmt.Errorf("accept: %w", err)
+			}
 		}
 		go s.serve(conn)
 	}

@@ -38,23 +38,26 @@ Example:
 }
 
 type Config struct {
-	BotAToken          string
-	BotBToken          string
+	BotToken           string
 	ChatID             int64
 	Socks5Addr         string
 	SessionIdleTimeout time.Duration
 	LogLevel           slog.Level
 }
 
-func Load() (*Config, error) {
-	botA := os.Getenv("BOT_A_TOKEN")
-	if botA == "" {
-		return nil, fmt.Errorf("BOT_A_TOKEN is required")
+func Load(role string) (*Config, error) {
+	var tokenEnv string
+	switch role {
+	case "client":
+		tokenEnv = "BOT_A_TOKEN"
+	case "server":
+		tokenEnv = "BOT_B_TOKEN"
+	default:
+		return nil, fmt.Errorf("unknown role %q", role)
 	}
-
-	botB := os.Getenv("BOT_B_TOKEN")
-	if botB == "" {
-		return nil, fmt.Errorf("BOT_B_TOKEN is required")
+	botToken := os.Getenv(tokenEnv)
+	if botToken == "" {
+		return nil, fmt.Errorf("%s is required", tokenEnv)
 	}
 
 	chatIDStr := os.Getenv("CHAT_ID")
@@ -87,8 +90,7 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		BotAToken:          botA,
-		BotBToken:          botB,
+		BotToken:           botToken,
 		ChatID:             chatID,
 		Socks5Addr:         socks5Addr,
 		SessionIdleTimeout: idleTimeout,

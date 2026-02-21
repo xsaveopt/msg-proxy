@@ -17,16 +17,14 @@ import (
 )
 
 type Proxy struct {
-	botA    *transport.Bot
-	botB    *transport.Bot
+	bot     *transport.Bot
 	manager *session.Manager
 	logger  *slog.Logger
 }
 
-func New(botA, botB *transport.Bot, logger *slog.Logger) *Proxy {
+func New(bot *transport.Bot, logger *slog.Logger) *Proxy {
 	return &Proxy{
-		botA:    botA,
-		botB:    botB,
+		bot:     bot,
 		manager: session.NewManager(),
 		logger:  logger,
 	}
@@ -40,11 +38,11 @@ func (p *Proxy) Run(ctx context.Context, socks5Addr string, idleTimeout time.Dur
 	}()
 	p.manager.StartReaper(10*time.Second, idleTimeout, stop)
 
-	packets := p.botB.StartReceiver(ctx)
+	packets := p.bot.StartReceiver(ctx)
 	go p.receiveLoop(ctx, packets)
 
 	srv := socks5.New(socks5Addr, p.logger, p.handleConnect)
-	return srv.ListenAndServe()
+	return srv.ListenAndServe(ctx)
 }
 
 func (p *Proxy) receiveLoop(ctx context.Context, packets <-chan *protocol.Packet) {
@@ -99,7 +97,7 @@ func (p *Proxy) handleConnect(conn net.Conn, req socks5.ConnectRequest) {
 	defer p.manager.Delete(sessionID)
 	defer sess.Close()
 
-	if err := p.botA.SendWait(ctx, &protocol.Packet{
+	if err := p.bot.SendWait(ctx, &protocol.Packet{
 		SessionID: sessionID,
 		Type:      protocol.TypeConnect,
 		Target:    req.Target,
@@ -147,7 +145,7 @@ func (p *Proxy) handleConnect(conn net.Conn, req socks5.ConnectRequest) {
 	sess.SetState(session.StateConnected)
 	logger.Info("tunnel established")
 
-	stream := reliable.New(sessionID, p.botA, reliable.RetransmitTimeout)
+	stream := reliable.New(sessionID, p.bot, reliable.RetransmitTimeout)
 	defer stream.Stop()
 
 	done := make(chan struct{}, 1)
@@ -205,7 +203,7 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			if err != io.EOF {
 				logger.Debug("browser read error", "err", err)
 			}
-			p.botA.SendWait(ctx, &protocol.Packet{
+			p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: sess.ID,
 				Type:      protocol.TypeClose,
 			})

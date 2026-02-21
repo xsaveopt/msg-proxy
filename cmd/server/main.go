@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load()
+	cfg, err := config.Load("server")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n\n", err)
 		config.PrintHelp("server")
@@ -27,17 +27,11 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
 
-	botA, err := transport.NewBot(cfg.BotAToken, cfg.ChatID, logger)
+	bot, err := transport.NewBot(cfg.BotToken, cfg.ChatID, logger)
 	if err != nil {
-		log.Fatalf("BotA init: %v", err)
+		log.Fatalf("bot init: %v", err)
 	}
-	defer botA.Stop()
-
-	botB, err := transport.NewBot(cfg.BotBToken, cfg.ChatID, logger)
-	if err != nil {
-		log.Fatalf("BotB init: %v", err)
-	}
-	defer botB.Stop()
+	defer bot.Stop()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -45,7 +39,7 @@ func main() {
 	stats.Global.LogPeriodically(ctx, logger, 30*time.Second)
 
 	logger.Info("server starting")
-	proxy := server.New(botA, botB, logger)
+	proxy := server.New(bot, logger)
 	proxy.Run(ctx, cfg.SessionIdleTimeout)
 	logger.Info("server stopped")
 }

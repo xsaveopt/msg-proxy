@@ -96,7 +96,7 @@ func (b *Bot) receiveLoop(ctx context.Context, out chan<- *protocol.Packet) {
 
 	cfg := tgbotapi.NewUpdate(0)
 	cfg.Timeout = 30
-	cfg.AllowedUpdates = []string{"message"}
+	cfg.AllowedUpdates = []string{"channel_post"}
 
 	updates := b.api.GetUpdatesChan(cfg)
 
@@ -109,13 +109,13 @@ func (b *Bot) receiveLoop(ctx context.Context, out chan<- *protocol.Packet) {
 			if !ok {
 				return
 			}
-			if update.Message == nil || update.Message.Text == "" {
+			if update.ChannelPost == nil || update.ChannelPost.Text == "" {
 				continue
 			}
-			if update.Message.Chat.ID != b.chatID {
+			if update.ChannelPost.Chat.ID != b.chatID {
 				continue
 			}
-			pkt, err := protocol.Decode(update.Message.Text)
+			pkt, err := protocol.Decode(update.ChannelPost.Text)
 			if err != nil {
 				b.logger.Debug("ignoring non-packet message", "err", err)
 				continue

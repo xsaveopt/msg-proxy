@@ -21,8 +21,7 @@ type connState struct {
 }
 
 type Proxy struct {
-	botA    *transport.Bot
-	botB    *transport.Bot
+	bot     *transport.Bot
 	manager *session.Manager
 	logger  *slog.Logger
 
@@ -30,10 +29,9 @@ type Proxy struct {
 	states map[string]*connState
 }
 
-func New(botA, botB *transport.Bot, logger *slog.Logger) *Proxy {
+func New(bot *transport.Bot, logger *slog.Logger) *Proxy {
 	return &Proxy{
-		botA:    botA,
-		botB:    botB,
+		bot:     bot,
 		manager: session.NewManager(),
 		logger:  logger,
 		states:  make(map[string]*connState),
@@ -48,7 +46,7 @@ func (p *Proxy) Run(ctx context.Context, idleTimeout time.Duration) {
 	}()
 	p.manager.StartReaper(10*time.Second, idleTimeout, stop)
 
-	packets := p.botA.StartReceiver(ctx)
+	packets := p.bot.StartReceiver(ctx)
 	for {
 		select {
 		case pkt, ok := <-packets:
@@ -102,7 +100,7 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 		conn, err := net.DialTimeout("tcp", pkt.Target, 10*time.Second)
 		if err != nil {
 			logger.Warn("TCP dial failed", "err", err)
-			p.botB.SendWait(ctx, &protocol.Packet{
+			p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: pkt.SessionID,
 				Type:      protocol.TypeError,
 				Payload:   protocol.EncodePayload([]byte(err.Error())),
@@ -111,7 +109,7 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 		}
 		defer conn.Close()
 
-		stream := reliable.New(pkt.SessionID, p.botB, reliable.RetransmitTimeout)
+		stream := reliable.New(pkt.SessionID, p.bot, reliable.RetransmitTimeout)
 		defer stream.Stop()
 
 		p.mu.Lock()
@@ -121,7 +119,7 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 		sess.SetState(session.StateConnected)
 		sess.Touch()
 
-		if err := p.botB.SendWait(connCtx, &protocol.Packet{
+		if err := p.bot.SendWait(connCtx, &protocol.Packet{
 			SessionID: pkt.SessionID,
 			Type:      protocol.TypeAck,
 		}); err != nil {
@@ -190,7 +188,7 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			if err != io.EOF {
 				logger.Debug("TCP read error", "err", err)
 			}
-			p.botB.SendWait(ctx, &protocol.Packet{
+			p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: sess.ID,
 				Type:      protocol.TypeClose,
 			})

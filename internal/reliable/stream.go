@@ -10,15 +10,18 @@ import (
 	"msg-proxy/internal/stats"
 )
 
-const RetransmitTimeout = 3 * time.Second
+const RetransmitTimeout = 30 * time.Second
 
 type Sender interface {
 	Send(p *protocol.Packet) error
+	SendAsync(ctx context.Context, p *protocol.Packet) error
+	SendAsyncCallback(ctx context.Context, p *protocol.Packet, onSent func()) error
 	SendWait(ctx context.Context, p *protocol.Packet) error
 }
 
 type pending struct {
 	pkt    *protocol.Packet
+	sent   bool
 	sentAt time.Time
 }
 
@@ -68,10 +71,22 @@ func (s *Stream) Send(ctx context.Context, data []byte) error {
 			Type:      protocol.TypeData,
 			Payload:   protocol.EncodePayload(chunk),
 		}
-		s.unacked[seq] = &pending{pkt: pkt, sentAt: time.Now()}
+		p := &pending{pkt: pkt}
+		s.unacked[seq] = p
 		s.sendMu.Unlock()
 
-		if err := s.bot.SendWait(ctx, pkt); err != nil {
+		capturedP := p
+		capturedSeq := seq
+		onSent := func() {
+			s.sendMu.Lock()
+			if q, ok := s.unacked[capturedSeq]; ok && q == capturedP {
+				capturedP.sent = true
+				capturedP.sentAt = time.Now()
+			}
+			s.sendMu.Unlock()
+		}
+
+		if err := s.bot.SendAsyncCallback(ctx, pkt, onSent); err != nil {
 			return err
 		}
 	}
@@ -189,6 +204,9 @@ func (s *Stream) retransmit() {
 	s.sendMu.Lock()
 	var toSend []*protocol.Packet
 	for _, p := range s.unacked {
+		if !p.sent {
+			continue
+		}
 		if now.Sub(p.sentAt) >= s.retransmitTimeout {
 			p.sentAt = now
 			toSend = append(toSend, p.pkt)

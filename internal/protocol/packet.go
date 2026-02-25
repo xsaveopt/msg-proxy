@@ -8,7 +8,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-const MaxPayloadBytes = 2048
+const MaxPayloadBytes = 2900
 
 const (
 	TypeConnect = "connect"
@@ -28,7 +28,7 @@ type Packet struct {
 }
 
 var (
-	zstdEncoder, _ = zstd.NewWriter(nil)
+	zstdEncoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
 	zstdDecoder, _ = zstd.NewReader(nil)
 )
 
@@ -37,21 +37,12 @@ func Encode(p *Packet) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("marshal packet: %w", err)
 	}
-	compressed := zstdEncoder.EncodeAll(raw, nil)
-	return base64.StdEncoding.EncodeToString(compressed), nil
+	return string(raw), nil
 }
 
 func Decode(s string) (*Packet, error) {
-	compressed, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		return nil, fmt.Errorf("base64 decode: %w", err)
-	}
-	raw, err := zstdDecoder.DecodeAll(compressed, nil)
-	if err != nil {
-		return nil, fmt.Errorf("zstd decompress: %w", err)
-	}
 	var p Packet
-	if err := json.Unmarshal(raw, &p); err != nil {
+	if err := json.Unmarshal([]byte(s), &p); err != nil {
 		return nil, fmt.Errorf("unmarshal packet: %w", err)
 	}
 	return &p, nil

@@ -22,6 +22,18 @@ func (m *mockBot) Send(p *protocol.Packet) error {
 	return nil
 }
 
+func (m *mockBot) SendAsync(_ context.Context, p *protocol.Packet) error {
+	return m.Send(p)
+}
+
+func (m *mockBot) SendAsyncCallback(_ context.Context, p *protocol.Packet, onSent func()) error {
+	err := m.Send(p)
+	if err == nil && onSent != nil {
+		onSent()
+	}
+	return err
+}
+
 func (m *mockBot) SendWait(_ context.Context, p *protocol.Packet) error {
 	return m.Send(p)
 }

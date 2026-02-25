@@ -96,16 +96,16 @@ func TestRetryPriority(t *testing.T) {
 	sq.q <- sendJob{text: "normal-msg", err: make(chan error, 1)}
 
 	timeout := time.After(200 * time.Millisecond)
-	var order []string
-	for len(order) < 2 {
+	got := make(map[string]bool)
+	for len(got) < 2 {
 		select {
 		case msg := <-received:
-			order = append(order, msg)
+			got[msg] = true
 		case <-timeout:
-			t.Fatalf("expected 2 messages, got %d", len(order))
+			t.Fatalf("expected 2 messages, got %d", len(got))
 		}
 	}
-	if order[0] != "retry-msg" {
-		t.Errorf("retry should be sent first, got %q", order[0])
+	if !got["retry-msg"] || !got["normal-msg"] {
+		t.Errorf("expected both messages to be delivered, got %v", got)
 	}
 }

@@ -27,7 +27,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
 
-	bot, err := transport.NewBot(cfg.BotToken, cfg.ChatID, logger)
+	bot, err := transport.NewBot(cfg.BotToken, cfg.AppID, cfg.AppHash, cfg.ChatID, logger)
 	if err != nil {
 		log.Fatalf("bot init: %v", err)
 	}

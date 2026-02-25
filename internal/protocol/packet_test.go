@@ -82,14 +82,14 @@ func TestSplitData(t *testing.T) {
 }
 
 func TestDecodeInvalid(t *testing.T) {
-	_, err := Decode("not-valid-base64!!!")
+	_, err := Decode("not valid json!!!")
 	if err == nil {
-		t.Error("expected error for invalid base64")
+		t.Error("expected error for invalid JSON")
 	}
 
-	_, err = Decode("aGVsbG8=")
+	_, err = Decode("42")
 	if err == nil {
-		t.Error("expected error for invalid zstd")
+		t.Error("expected error for non-object JSON")
 	}
 }
 
@@ -109,9 +109,12 @@ func TestConnectPacket(t *testing.T) {
 			t.Errorf("encoded contains non-ASCII char: %q", ch)
 		}
 	}
-	for _, ch := range encoded {
-		if !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=", ch) {
-			t.Errorf("encoded contains unexpected char: %q", ch)
-		}
+	decoded, err := Decode(encoded)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
 	}
+	if decoded.SessionID != p.SessionID || decoded.Target != p.Target || decoded.Type != p.Type {
+		t.Errorf("round-trip mismatch: got %+v, want %+v", decoded, p)
+	}
+	_ = strings.ToUpper
 }

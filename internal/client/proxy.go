@@ -54,7 +54,7 @@ func (p *Proxy) receiveLoop(ctx context.Context, packets <-chan *protocol.Packet
 			}
 			sess := p.manager.Get(pkt.SessionID)
 			if sess == nil {
-				p.logger.Warn("unknown session", "session", pkt.SessionID, "type", pkt.Type)
+				p.logger.Debug("unknown session (already cleaned up)", "session", pkt.SessionID, "type", pkt.Type)
 				continue
 			}
 			sess.Touch()
@@ -196,6 +196,7 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			sess.Touch()
 			if sendErr := stream.Send(ctx, buf[:n]); sendErr != nil {
 				logger.Debug("stream send failed", "err", sendErr)
+				p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
 				return
 			}
 		}

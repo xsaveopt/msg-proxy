@@ -166,7 +166,7 @@ func (p *Proxy) handleClose(pkt *protocol.Packet) {
 	p.mu.RUnlock()
 
 	if state == nil {
-		p.logger.Warn("unknown session for CLOSE", "session", pkt.SessionID)
+		p.logger.Debug("unknown session for CLOSE (already cleaned up)", "session", pkt.SessionID)
 		return
 	}
 	p.logger.Info("client closed session", "session", pkt.SessionID)
@@ -181,6 +181,7 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			sess.Touch()
 			if sendErr := stream.Send(ctx, buf[:n]); sendErr != nil {
 				logger.Debug("stream send failed", "err", sendErr)
+				p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
 				return
 			}
 		}

@@ -4,15 +4,22 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
-const queueCap = 512
+const (
+	queueCap     = 512
+	workers      = 1
+	sendInterval = 3000 * time.Millisecond
+)
 
 var ErrQueueFull = errors.New("send queue full")
 
 type sendJob struct {
-	text string
-	err  chan error
+	text   string
+	err    chan error
+	onSent func()
+	urgent bool
 }
 
 type SendQueue struct {
@@ -30,12 +37,14 @@ func NewSendQueue(sendFn func(text string) error) *SendQueue {
 		sendFn: sendFn,
 		stopCh: make(chan struct{}),
 	}
-	go sq.run()
+	for i := 0; i < workers; i++ {
+		go sq.worker()
+	}
 	return sq
 }
 
 func (sq *SendQueue) Enqueue(text string) error {
-	job := sendJob{text: text}
+	job := sendJob{text: text, urgent: true}
 	select {
 	case sq.q <- job:
 		return nil
@@ -44,8 +53,32 @@ func (sq *SendQueue) Enqueue(text string) error {
 	}
 }
 
+func (sq *SendQueue) EnqueueAsync(ctx context.Context, text string) error {
+	job := sendJob{text: text}
+	select {
+	case sq.q <- job:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sq.stopCh:
+		return errors.New("queue stopped")
+	}
+}
+
+func (sq *SendQueue) EnqueueAsyncCallback(ctx context.Context, text string, onSent func()) error {
+	job := sendJob{text: text, onSent: onSent}
+	select {
+	case sq.q <- job:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sq.stopCh:
+		return errors.New("queue stopped")
+	}
+}
+
 func (sq *SendQueue) EnqueueWait(ctx context.Context, text string) error {
-	job := sendJob{text: text, err: make(chan error, 1)}
+	job := sendJob{text: text, err: make(chan error, 1), urgent: true}
 	select {
 	case sq.q <- job:
 	case <-ctx.Done():
@@ -67,30 +100,41 @@ func (sq *SendQueue) Stop() {
 	sq.stopOnce.Do(func() { close(sq.stopCh) })
 }
 
-func (sq *SendQueue) run() {
+func (sq *SendQueue) worker() {
 	for {
+		var job sendJob
 		select {
-		case job := <-sq.retry:
-			sq.dispatch(job)
-			continue
+		case job = <-sq.retry:
+			job.urgent = true
 		case <-sq.stopCh:
 			return
 		default:
+			select {
+			case job = <-sq.retry:
+				job.urgent = true
+			case job = <-sq.q:
+			case <-sq.stopCh:
+				return
+			}
 		}
 
-		select {
-		case job := <-sq.retry:
-			sq.dispatch(job)
-		case job := <-sq.q:
-			sq.dispatch(job)
-		case <-sq.stopCh:
-			return
+		sq.dispatch(job)
+
+		if !job.urgent {
+			select {
+			case <-time.After(sendInterval):
+			case <-sq.stopCh:
+				return
+			}
 		}
 	}
 }
 
 func (sq *SendQueue) dispatch(job sendJob) {
 	err := sq.sendFn(job.text)
+	if err == nil && job.onSent != nil {
+		job.onSent()
+	}
 	if job.err != nil {
 		job.err <- err
 	}

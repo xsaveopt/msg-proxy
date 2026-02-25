@@ -12,9 +12,11 @@ func PrintHelp(role string) {
 	fmt.Fprintln(os.Stderr, `msg-proxy — tunnel TCP through Telegram messages
 
 Required environment variables:
-  BOT_A_TOKEN   Telegram bot token for the A bot (client→server traffic)
-  BOT_B_TOKEN   Telegram bot token for the B bot (server→client traffic)
-  CHAT_ID       Telegram chat ID that both bots share
+  TELEGRAM_APP_ID    Telegram application ID (from https://my.telegram.org)
+  TELEGRAM_APP_HASH  Telegram application hash (from https://my.telegram.org)
+  CLIENT_TOKEN       Telegram bot token for the client-side bot
+  SERVER_TOKEN       Telegram bot token for the server-side bot
+  CHAT_ID            Telegram channel ID that both bots share (e.g. -1001234567890)
 
 Optional environment variables:`)
 
@@ -26,8 +28,8 @@ Optional environment variables:`)
   LOG_LEVEL             debug | info | warn | error (default: info)
 
 Example:
-  export BOT_A_TOKEN=123456:ABC...
-  export BOT_B_TOKEN=654321:XYZ...
+  export CLIENT_TOKEN=123456:ABC...
+  export SERVER_TOKEN=654321:XYZ...
   export CHAT_ID=-1001234567890`)
 
 	if role == "client" {
@@ -38,6 +40,8 @@ Example:
 }
 
 type Config struct {
+	AppID              int
+	AppHash            string
 	BotToken           string
 	ChatID             int64
 	Socks5Addr         string
@@ -46,12 +50,26 @@ type Config struct {
 }
 
 func Load(role string) (*Config, error) {
+	appIDStr := os.Getenv("TELEGRAM_APP_ID")
+	if appIDStr == "" {
+		return nil, fmt.Errorf("TELEGRAM_APP_ID is required")
+	}
+	appIDVal, err := strconv.Atoi(appIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("TELEGRAM_APP_ID must be an integer: %w", err)
+	}
+
+	appHash := os.Getenv("TELEGRAM_APP_HASH")
+	if appHash == "" {
+		return nil, fmt.Errorf("TELEGRAM_APP_HASH is required")
+	}
+
 	var tokenEnv string
 	switch role {
 	case "client":
-		tokenEnv = "BOT_A_TOKEN"
+		tokenEnv = "CLIENT_TOKEN"
 	case "server":
-		tokenEnv = "BOT_B_TOKEN"
+		tokenEnv = "SERVER_TOKEN"
 	default:
 		return nil, fmt.Errorf("unknown role %q", role)
 	}
@@ -90,6 +108,8 @@ func Load(role string) (*Config, error) {
 	}
 
 	return &Config{
+		AppID:              appIDVal,
+		AppHash:            appHash,
 		BotToken:           botToken,
 		ChatID:             chatID,
 		Socks5Addr:         socks5Addr,

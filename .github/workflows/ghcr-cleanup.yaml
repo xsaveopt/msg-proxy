@@ -1,12 +1,16 @@
 name: GHCR cleanup
 
 # Retention policy:
-#   - Delete untagged image versions older than 2 days.
+#   - Delete every untagged image version.
 #   - Keep every tagged version (latest, dev, dev-<sha>, semver, etc.).
 #
 # Untagged versions accrue every time a rolling tag (:dev, :latest) moves and
 # orphans the previous digest. Pruning them keeps the package list tidy and
 # reclaims storage without ever touching something you can pull by name.
+#
+# NOTE: this action has no age-based cutoff — untagged versions get removed
+# as soon as this workflow runs. If you want a grace window, run the workflow
+# less often instead of trying to add one (it's not a supported parameter).
 
 on:
   schedule:
@@ -15,16 +19,17 @@ on:
 
 permissions:
   packages: write
+  contents: read
 
 jobs:
   prune-untagged:
     runs-on: ubuntu-latest
     steps:
-      - uses: snok/container-retention-policy@v3
+      # Pinned by commit SHA (not tag) per GitHub's third-party-action hardening
+      # guidance. Update the SHA + comment together when bumping.
+      - uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
         with:
-          account: ${{ github.repository_owner }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          image-names: "msg-proxy/server msg-proxy/client"
-          image-tags: "!*" # match only untagged versions
-          cut-off: 2d
-          dry-run: false
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          delete-only-untagged-versions: "true"
+          min-versions-to-keep: "0"

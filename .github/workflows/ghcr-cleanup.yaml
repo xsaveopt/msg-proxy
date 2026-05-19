@@ -11,6 +11,11 @@ name: GHCR cleanup
 # NOTE: this action has no age-based cutoff — untagged versions get removed
 # as soon as this workflow runs. If you want a grace window, run the workflow
 # less often instead of trying to add one (it's not a supported parameter).
+#
+# msg-proxy publishes two GHCR packages: <repo>/server and <repo>/client. Both
+# get pruned independently. github.event.repository.name (just "msg-proxy")
+# does NOT match either package, which is why the previous single-step setup
+# failed every run.
 
 on:
   schedule:
@@ -24,12 +29,20 @@ permissions:
 jobs:
   prune-untagged:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [msg-proxy/server, msg-proxy/client]
     steps:
       # Pinned by commit SHA (not tag) per GitHub's third-party-action hardening
       # guidance. Update the SHA + comment together when bumping.
+      # continue-on-error: the action fails when the package does not exist yet
+      # (newly-created repo, no image pushed). Tolerate that instead of
+      # turning every fresh repo into a daily red-X notification.
       - uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
+        continue-on-error: true
         with:
-          package-name: ${{ github.event.repository.name }}
+          package-name: ${{ matrix.package }}
           package-type: container
           delete-only-untagged-versions: "true"
           min-versions-to-keep: "0"

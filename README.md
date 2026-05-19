@@ -78,7 +78,14 @@ curl --socks5 127.0.0.1:1080 http://httpbin.org/ip
 
 ## Docker images
 
-Pre-built images are published to the GitHub Container Registry on every push to `main` and on version tags.
+Two pre-built images per release, published to GHCR:
+
+- `ghcr.io/sratabix/msg-proxy/server`
+- `ghcr.io/sratabix/msg-proxy/client`
+
+### Tags
+
+`latest` for the latest stable release. `1`, `1.2`, `1.2.3` to pin to a major, minor, or patch line. Pre-releases like `1.2.3-rc1` are never tagged `latest`. `dev` tracks the tip of the `main` branch (rebuilt on every commit) and is the easiest tag to use for testing without waiting for a release. Images are built for `linux/amd64`.
 
 **Run the server via Docker:**
 
@@ -88,7 +95,7 @@ docker run --rm \
   -e TELEGRAM_APP_HASH=<api-hash> \
   -e SERVER_TOKEN=<server-bot-token> \
   -e CHAT_ID=<channel-id> \
-  ghcr.io/<owner>/msg-proxy/server:latest
+  ghcr.io/sratabix/msg-proxy/server:latest
 ```
 
 **Build images locally** (requires [ko](https://ko.build)):

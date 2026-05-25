@@ -24,7 +24,9 @@ func dialSocks5(t *testing.T, addr, target string) (net.Conn, byte) {
 	portN, _ := net.LookupPort("tcp", portStr)
 	port = uint16(portN)
 
-	conn.Write([]byte{0x05, 0x01, 0x00})
+	if _, err := conn.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+		t.Fatalf("write auth: %v", err)
+	}
 	authReply := make([]byte, 2)
 	if _, err := conn.Read(authReply); err != nil {
 		t.Fatalf("read auth reply: %v", err)
@@ -38,7 +40,9 @@ func dialSocks5(t *testing.T, addr, target string) (net.Conn, byte) {
 	portBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(portBytes, port)
 	req = append(req, portBytes...)
-	conn.Write(req)
+	if _, err := conn.Write(req); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
 
 	reply := make([]byte, 10)
 	if _, err := conn.Read(reply); err != nil {
@@ -51,8 +55,8 @@ func TestHandshakeSuccess(t *testing.T) {
 	got := make(chan ConnectRequest, 1)
 	srv := New("127.0.0.1:0", noopLogger(), func(conn net.Conn, req ConnectRequest) {
 		got <- req
-		SendSuccess(conn)
-		conn.Close()
+		_ = SendSuccess(conn)
+		_ = conn.Close()
 	})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -68,10 +72,10 @@ func TestHandshakeSuccess(t *testing.T) {
 			go srv.serve(conn)
 		}
 	}()
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	conn, rep := dialSocks5(t, ln.Addr().String(), "example.com:80")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if rep != 0x00 {
 		t.Errorf("expected success (0x00), got 0x%02x", rep)
@@ -94,12 +98,12 @@ func TestHandshakeIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	srv := New("", noopLogger(), func(conn net.Conn, req ConnectRequest) {
 		got <- req
-		SendSuccess(conn)
-		conn.Close()
+		_ = SendSuccess(conn)
+		_ = conn.Close()
 	})
 
 	go func() {
@@ -114,17 +118,25 @@ func TestHandshakeIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	conn.Write([]byte{0x05, 0x01, 0x00})
+	if _, err := conn.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+		t.Fatalf("write auth: %v", err)
+	}
 	authReply := make([]byte, 2)
-	conn.Read(authReply)
+	if _, err := conn.Read(authReply); err != nil {
+		t.Fatalf("read auth reply: %v", err)
+	}
 
 	req := []byte{0x05, 0x01, 0x00, 0x01, 1, 2, 3, 4, 0x01, 0xBB}
-	conn.Write(req)
+	if _, err := conn.Write(req); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
 
 	reply := make([]byte, 10)
-	conn.Read(reply)
+	if _, err := conn.Read(reply); err != nil {
+		t.Fatalf("read reply: %v", err)
+	}
 
 	select {
 	case r := <-got:

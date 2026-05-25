@@ -72,7 +72,9 @@ func TestEnqueueWaitCancelledContext(t *testing.T) {
 	}()
 
 	for i := 0; i < queueCap; i++ {
-		sq.Enqueue("filler")
+		if err := sq.Enqueue("filler"); err != nil {
+			t.Fatalf("Enqueue: %v", err)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

@@ -74,7 +74,7 @@ func (p *Proxy) handleConnect(conn net.Conn, req socks5.ConnectRequest) {
 	defer func() {
 		if r := recover(); r != nil {
 			p.logger.Error("panic in CONNECT handler", "err", r)
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -185,7 +185,7 @@ func (p *Proxy) handleConnect(conn net.Conn, req socks5.ConnectRequest) {
 	}()
 
 	<-done
-	conn.Close()
+	_ = conn.Close()
 }
 
 func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn net.Conn, stream *reliable.Stream, logger *slog.Logger) {
@@ -196,7 +196,8 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			sess.Touch()
 			if sendErr := stream.Send(ctx, buf[:n]); sendErr != nil {
 				logger.Debug("stream send failed", "err", sendErr)
-				p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
+				// Best-effort teardown signal; we're returning regardless.
+				_ = p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
 				return
 			}
 		}
@@ -204,7 +205,8 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			if err != io.EOF {
 				logger.Debug("browser read error", "err", err)
 			}
-			p.bot.SendWait(ctx, &protocol.Packet{
+			// Best-effort teardown signal; we're returning regardless.
+			_ = p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: sess.ID,
 				Type:      protocol.TypeClose,
 			})

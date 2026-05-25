@@ -31,7 +31,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.logger.Info("SOCKS5 listening", "addr", s.addr)
 	go func() {
 		<-ctx.Done()
-		ln.Close()
+		// Triggers Accept to return; closing an already-closed listener is fine.
+		_ = ln.Close()
 	}()
 	for {
 		conn, err := ln.Accept()
@@ -51,14 +52,14 @@ func (s *Server) serve(conn net.Conn) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.logger.Error("panic in SOCKS5 handler", "err", r)
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
 	req, err := Handshake(conn)
 	if err != nil {
 		s.logger.Warn("SOCKS5 handshake failed", "err", err, "remote", conn.RemoteAddr())
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 	s.handler(conn, *req)
@@ -136,6 +137,8 @@ func SendSuccess(conn net.Conn) error {
 }
 
 func SendFailure(conn net.Conn) {
-	conn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-	conn.Close()
+	// Best-effort failure reply followed by close; nothing to recover from
+	// if either fails.
+	_, _ = conn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	_ = conn.Close()
 }

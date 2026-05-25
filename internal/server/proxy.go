@@ -100,14 +100,15 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 		conn, err := net.DialTimeout("tcp", pkt.Target, 10*time.Second)
 		if err != nil {
 			logger.Warn("TCP dial failed", "err", err)
-			p.bot.SendWait(ctx, &protocol.Packet{
+			// Best-effort error report to the client; we're returning regardless.
+			_ = p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: pkt.SessionID,
 				Type:      protocol.TypeError,
 				Payload:   protocol.EncodePayload([]byte(err.Error())),
 			})
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		stream := reliable.New(pkt.SessionID, p.bot, reliable.RetransmitTimeout)
 		defer stream.Stop()
@@ -181,7 +182,8 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			sess.Touch()
 			if sendErr := stream.Send(ctx, buf[:n]); sendErr != nil {
 				logger.Debug("stream send failed", "err", sendErr)
-				p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
+				// Best-effort teardown; we're returning regardless.
+				_ = p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
 				return
 			}
 		}
@@ -189,7 +191,8 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			if err != io.EOF {
 				logger.Debug("TCP read error", "err", err)
 			}
-			p.bot.SendWait(ctx, &protocol.Packet{
+			// Best-effort teardown; we're returning regardless.
+			_ = p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: sess.ID,
 				Type:      protocol.TypeClose,
 			})

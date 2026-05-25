@@ -203,7 +203,9 @@ func TestStreamDackClearsUnacked(t *testing.T) {
 	ctx := context.Background()
 
 	for _, payload := range []string{"a", "b", "c"} {
-		s.Send(ctx, []byte(payload))
+		if err := s.Send(ctx, []byte(payload)); err != nil {
+			t.Fatalf("Send(%q): %v", payload, err)
+		}
 	}
 
 	s.sendMu.Lock()
@@ -249,7 +251,9 @@ func TestStreamRetransmitStopsAfterDack(t *testing.T) {
 	defer s.Stop()
 
 	ctx := context.Background()
-	s.Send(ctx, []byte("will be acked"))
+	if err := s.Send(ctx, []byte("will be acked")); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
 
 	s.Deliver(ctx, &protocol.Packet{Type: protocol.TypeDataAck, Seq: 0})
 

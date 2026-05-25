@@ -62,8 +62,8 @@ jobs:
       - uses: ko-build/setup-ko@v0.7
       - name: Build (no push)
         run: |
-          ko build --push=false --base-import-paths ./cmd/server
-          ko build --push=false --base-import-paths ./cmd/client
+          ko build --sbom=none --push=false --base-import-paths ./cmd/server
+          ko build --sbom=none --push=false --base-import-paths ./cmd/client
 
   publish-dev:
     name: Publish :dev images
@@ -85,8 +85,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push :dev
         run: |
-          ko build --tags="dev" --base-import-paths ./cmd/server
-          ko build --tags="dev" --base-import-paths ./cmd/client
+          ko build --sbom=none --tags="dev" --base-import-paths ./cmd/server
+          ko build --sbom=none --tags="dev" --base-import-paths ./cmd/client
 
   publish:
     name: Publish images
@@ -127,5 +127,5 @@ jobs:
 
       - name: Build and push
         run: |
-          ko build --tags="${{ steps.tags.outputs.tags }}" --base-import-paths ./cmd/server
-          ko build --tags="${{ steps.tags.outputs.tags }}" --base-import-paths ./cmd/client
+          ko build --sbom=none --tags="${{ steps.tags.outputs.tags }}" --base-import-paths ./cmd/server
+          ko build --sbom=none --tags="${{ steps.tags.outputs.tags }}" --base-import-paths ./cmd/client

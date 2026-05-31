@@ -1,6 +1,3 @@
-# Weekly bumps for everything we depend on. Minor + patch updates are grouped
-# into a single PR per ecosystem so the inbox stays sane; majors stay separate
-# so they get reviewed on their own.
 version: 2
 updates:
   - package-ecosystem: gomod

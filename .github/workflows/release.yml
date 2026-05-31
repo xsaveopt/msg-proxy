@@ -1,11 +1,5 @@
 name: CI
 
-# Push to main → :dev (rolling, overwritten each push). Push of v*.*.* tag →
-# semver tags (1.2.3, 1.2, 1) plus :latest (skipped for pre-releases like
-# v1.2.3-rc1). Other branches/PRs just sanity-build to surface breakage.
-#
-# msg-proxy publishes two images via ko: ghcr.io/<owner>/msg-proxy/server and
-# ghcr.io/<owner>/msg-proxy/client. Both move together on the same tags.
 on:
   push:
     branches: ["**"]
@@ -46,8 +40,6 @@ jobs:
       - name: Go test
         run: go test -race ./...
 
-  # Branches and PRs (not main, not version tags): ko build with --push=false
-  # to sanity-check that the image build itself isn't broken.
   ko-build:
     name: ko build (no push)
     needs: ci
@@ -109,9 +101,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Strip the leading "v" from the tag (v1.2.3 → 1.2.3) and derive
-      # major/major.minor. Skip the :latest alias on pre-releases (anything
-      # with a hyphen, e.g. v1.2.3-rc1).
       - name: Compute tags
         id: tags
         run: |

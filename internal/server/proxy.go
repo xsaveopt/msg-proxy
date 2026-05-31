@@ -100,7 +100,6 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 		conn, err := net.DialTimeout("tcp", pkt.Target, 10*time.Second)
 		if err != nil {
 			logger.Warn("TCP dial failed", "err", err)
-			// Best-effort error report to the client; we're returning regardless.
 			_ = p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: pkt.SessionID,
 				Type:      protocol.TypeError,
@@ -130,7 +129,12 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 		logger.Info("connected, ACK sent")
 
 		done := make(chan struct{}, 1)
-		signal := func() { select { case done <- struct{}{}: default: } }
+		signal := func() {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+		}
 
 		go func() {
 			defer signal()
@@ -182,7 +186,6 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			sess.Touch()
 			if sendErr := stream.Send(ctx, buf[:n]); sendErr != nil {
 				logger.Debug("stream send failed", "err", sendErr)
-				// Best-effort teardown; we're returning regardless.
 				_ = p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
 				return
 			}
@@ -191,7 +194,6 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			if err != io.EOF {
 				logger.Debug("TCP read error", "err", err)
 			}
-			// Best-effort teardown; we're returning regardless.
 			_ = p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: sess.ID,
 				Type:      protocol.TypeClose,

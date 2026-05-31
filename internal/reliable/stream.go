@@ -179,8 +179,6 @@ func (s *Stream) handleDack(ackSeq uint32) {
 }
 
 func (s *Stream) sendDack(ackSeq uint32) {
-	// Send is fire-and-forget; a dropped DACK just delays peer cleanup until
-	// the next cumulative DACK or retransmit.
 	_ = s.bot.Send(&protocol.Packet{
 		SessionID: s.id,
 		Seq:       ackSeq,
@@ -220,8 +218,6 @@ func (s *Stream) retransmit() {
 		stats.Global.Retransmits.Add(int64(len(toSend)))
 	}
 	for _, pkt := range toSend {
-		// Fire-and-forget; the retransmit loop will pick the packet up again
-		// on the next tick if this Send fails.
 		_ = s.bot.Send(pkt)
 	}
 }

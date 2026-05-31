@@ -4,8 +4,6 @@ BIN_DIR       := bin
 BINARY_SERVER := $(BIN_DIR)/server
 BINARY_CLIENT := $(BIN_DIR)/client
 
-# Registry prefix for ko. Defaults to ko.local (loads into local Docker daemon).
-# Override for a real registry: make images KO_DOCKER_REPO=ghcr.io/you/msg-proxy
 KO_DOCKER_REPO ?= ko.local
 
 all: build

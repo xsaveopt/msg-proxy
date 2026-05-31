@@ -31,7 +31,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.logger.Info("SOCKS5 listening", "addr", s.addr)
 	go func() {
 		<-ctx.Done()
-		// Triggers Accept to return; closing an already-closed listener is fine.
 		_ = ln.Close()
 	}()
 	for {
@@ -137,8 +136,6 @@ func SendSuccess(conn net.Conn) error {
 }
 
 func SendFailure(conn net.Conn) {
-	// Best-effort failure reply followed by close; nothing to recover from
-	// if either fails.
 	_, _ = conn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 	_ = conn.Close()
 }

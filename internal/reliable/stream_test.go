@@ -9,7 +9,6 @@ import (
 	"msg-proxy/internal/protocol"
 )
 
-
 type mockBot struct {
 	mu   sync.Mutex
 	sent []*protocol.Packet
@@ -55,7 +54,6 @@ func (m *mockBot) countByType(t string) int {
 	}
 	return n
 }
-
 
 func TestStreamSendReceive(t *testing.T) {
 	bot := &mockBot{}

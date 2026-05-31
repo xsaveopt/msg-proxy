@@ -149,7 +149,12 @@ func (p *Proxy) handleConnect(conn net.Conn, req socks5.ConnectRequest) {
 	defer stream.Stop()
 
 	done := make(chan struct{}, 1)
-	signal := func() { select { case done <- struct{}{}: default: } }
+	signal := func() {
+		select {
+		case done <- struct{}{}:
+		default:
+		}
+	}
 
 	go func() {
 		defer signal()
@@ -196,7 +201,6 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			sess.Touch()
 			if sendErr := stream.Send(ctx, buf[:n]); sendErr != nil {
 				logger.Debug("stream send failed", "err", sendErr)
-				// Best-effort teardown signal; we're returning regardless.
 				_ = p.bot.SendWait(ctx, &protocol.Packet{SessionID: sess.ID, Type: protocol.TypeClose})
 				return
 			}
@@ -205,7 +209,6 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			if err != io.EOF {
 				logger.Debug("browser read error", "err", err)
 			}
-			// Best-effort teardown signal; we're returning regardless.
 			_ = p.bot.SendWait(ctx, &protocol.Packet{
 				SessionID: sess.ID,
 				Type:      protocol.TypeClose,

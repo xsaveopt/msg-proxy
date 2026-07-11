@@ -80,8 +80,8 @@ curl --socks5 127.0.0.1:1080 http://httpbin.org/ip
 
 Two pre-built images per release, published to GHCR:
 
-- `ghcr.io/sratabix/msg-proxy/server`
-- `ghcr.io/sratabix/msg-proxy/client`
+- `ghcr.io/xsaveopt/msg-proxy/server`
+- `ghcr.io/xsaveopt/msg-proxy/client`
 
 ### Tags
 
@@ -95,7 +95,7 @@ docker run --rm \
   -e TELEGRAM_APP_HASH=<api-hash> \
   -e SERVER_TOKEN=<server-bot-token> \
   -e CHAT_ID=<channel-id> \
-  ghcr.io/sratabix/msg-proxy/server:latest
+  ghcr.io/xsaveopt/msg-proxy/server:latest
 ```
 
 **Build images locally** (requires [ko](https://ko.build)):

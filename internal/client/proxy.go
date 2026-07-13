@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -206,7 +207,7 @@ func (p *Proxy) readFromBrowser(ctx context.Context, sess *session.Session, conn
 			}
 		}
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				logger.Debug("browser read error", "err", err)
 			}
 			_ = p.bot.SendWait(ctx, &protocol.Packet{

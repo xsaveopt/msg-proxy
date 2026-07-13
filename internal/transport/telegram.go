@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -117,7 +118,7 @@ func NewBot(token string, appID int, appHash string, chatID int64, logger *slog.
 			<-ctx.Done()
 			return nil
 		})
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			b.logger.Error("client run error", "err", err)
 			select {
 			case ready <- err:

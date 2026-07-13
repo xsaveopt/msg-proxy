@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -191,7 +192,7 @@ func (p *Proxy) readFromTCP(ctx context.Context, sess *session.Session, conn net
 			}
 		}
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				logger.Debug("TCP read error", "err", err)
 			}
 			_ = p.bot.SendWait(ctx, &protocol.Packet{

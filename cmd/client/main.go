@@ -17,6 +17,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	cfg, err := config.Load("client")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n\n", err)
@@ -29,7 +35,7 @@ func main() {
 
 	bot, err := transport.NewBot(cfg.BotToken, cfg.AppID, cfg.AppHash, cfg.ChatID, logger)
 	if err != nil {
-		log.Fatalf("bot init: %v", err)
+		return fmt.Errorf("bot init: %w", err)
 	}
 	defer bot.Stop()
 
@@ -41,6 +47,7 @@ func main() {
 	logger.Info("client starting", "socks5", cfg.Socks5Addr)
 	proxy := client.New(bot, logger)
 	if err := proxy.Run(ctx, cfg.Socks5Addr, cfg.SessionIdleTimeout); err != nil {
-		log.Fatalf("proxy: %v", err)
+		return fmt.Errorf("proxy: %w", err)
 	}
+	return nil
 }

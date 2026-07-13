@@ -51,7 +51,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: ko-build/setup-ko@v0.9
+      - uses: ko-build/setup-ko@v0.10
       - name: Build (no push)
         run: |
           ko build --sbom=none --push=false --base-import-paths ./cmd/server
@@ -68,7 +68,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: ko-build/setup-ko@v0.9
+      - uses: ko-build/setup-ko@v0.10
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
@@ -92,7 +92,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: ko-build/setup-ko@v0.9
+      - uses: ko-build/setup-ko@v0.10
 
       - name: Log in to GHCR
         uses: docker/login-action@v4

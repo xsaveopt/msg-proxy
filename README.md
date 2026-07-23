@@ -30,7 +30,7 @@ make build
 # produces ./bin/server and ./bin/client
 ```
 
-Requires Go 1.24+.
+Requires Go 1.26+.
 
 ## Usage
 

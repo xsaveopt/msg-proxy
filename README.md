@@ -1,119 +1,78 @@
 # msg-proxy
 
-Tunnel TCP traffic through Telegram messages. A local SOCKS5 proxy encodes your browser's traffic as Telegram messages, a remote server decodes them and makes the real connections.
+msg-proxy tunnels TCP traffic through a Telegram channel.
+A client on your machine runs a local SOCKS5 proxy and posts each connection's traffic to the channel as messages, and a server elsewhere reads those messages, opens the real connections and posts the responses back.
+Each side logs in as its own bot over Telegram's MTProto protocol, every TCP connection becomes a session with its own UUID, and the data travels as zstd-compressed, base64-encoded chunks inside JSON messages.
 
-## How it works
-
-- Two Telegram bots in a shared channel: the client bot carries client→server traffic, the server bot carries server→client
-- Data is zstd-compressed and base64-encoded to fit in Telegram messages
-- Each TCP connection becomes a session tracked by UUID
-- Uses the Telegram MTProto protocol directly (not the Bot API) for lower latency
+Each bot sends a data message at most once every three seconds, which stays within Telegram's limit of 20 messages per minute per bot per chat and carries up to 2900 bytes of traffic per message.
+That puts throughput at roughly a kilobyte per second in each direction, enough for api calls, shell sessions and small files.
 
 ## Setup
 
-### 1. Get Telegram API credentials
+Log in at [my.telegram.org](https://my.telegram.org), open API Development Tools and create an application.
+Its api_id and api_hash are shared by the client and the server.
 
-Go to [my.telegram.org](https://my.telegram.org), log in, click **API Development Tools**, and create an application. Save the `api_id` (an integer) and `api_hash` (a hex string). These are shared by both the client and server.
+Create two bots with [@BotFather](https://t.me/BotFather), one for the client and one for the server, and keep both tokens.
+Then create a channel and add both bots as administrators with permission to post messages.
+The channel's chat id is a negative integer like -1001234567890, and forwarding a message from the channel to [@userinfobot](https://t.me/userinfobot) is one way to find it.
 
-### 2. Create two Telegram bots
+## Running
 
-Talk to [@BotFather](https://t.me/BotFather), create two bots, save both tokens.
+Building from source needs Go 1.26 or newer, and `make build` writes bin/server and bin/client.
 
-### 3. Create a Telegram channel and add both bots as admins
+Start the server on the machine that should make the real connections:
 
-Create a channel and add both bots as administrators with permission to post messages. Get the channel's chat ID (a negative integer like `-1001234567890`). You can get it by forwarding a message from the channel to [@userinfobot](https://t.me/userinfobot).
-
-### 4. Build
-
-```bash
-make build
-# produces ./bin/server and ./bin/client
+```sh
+TELEGRAM_APP_ID={api-id} TELEGRAM_APP_HASH={api-hash} SERVER_TOKEN={server-bot-token} CHAT_ID={chat-id} ./bin/server
 ```
 
-Requires Go 1.26+.
+Then start the client on your own machine:
 
-## Usage
-
-**On the remote server** (the machine that makes the real internet connections):
-
-```bash
-TELEGRAM_APP_ID=<api-id> \
-TELEGRAM_APP_HASH=<api-hash> \
-SERVER_TOKEN=<server-bot-token> \
-CHAT_ID=<channel-id> \
-./bin/server
+```sh
+TELEGRAM_APP_ID={api-id} TELEGRAM_APP_HASH={api-hash} CLIENT_TOKEN={client-bot-token} CHAT_ID={chat-id} ./bin/client
 ```
 
-**On your local machine:**
+Point your browser or any other SOCKS5-aware tool at the client's SOCKS5_ADDR.
+A request through the proxy comes back with the server's ip:
 
-```bash
-TELEGRAM_APP_ID=<api-id> \
-TELEGRAM_APP_HASH=<api-hash> \
-CLIENT_TOKEN=<client-bot-token> \
-CHAT_ID=<channel-id> \
-./bin/client
-```
-
-Then configure your browser to use SOCKS5 proxy at `127.0.0.1:1080`.
-
-**Verify it's working:**
-
-```bash
-curl --socks5 127.0.0.1:1080 http://httpbin.org/ip
-# should show the server's IP, not yours
+```sh
+curl --socks5 127.0.0.1:1080 https://httpbin.org/ip
 ```
 
 ## Configuration
 
-| Env var                | Default          | Description                                      |
-| ---------------------- | ---------------- | ------------------------------------------------ |
-| `TELEGRAM_APP_ID`      | required         | Integer app ID from my.telegram.org              |
-| `TELEGRAM_APP_HASH`    | required         | Hex app hash from my.telegram.org                |
-| `CLIENT_TOKEN`         | client only      | Token for the client-side bot                    |
-| `SERVER_TOKEN`         | server only      | Token for the server-side bot                    |
-| `CHAT_ID`              | required         | Channel ID (negative int, e.g. `-1001234567890`) |
-| `SOCKS5_ADDR`          | `127.0.0.1:1080` | Local SOCKS5 listen address (client only)        |
-| `SESSION_IDLE_TIMEOUT` | `60s`            | Kill idle sessions after this duration           |
-| `LOG_LEVEL`            | `info`           | `debug`, `info`, `warn`, `error`                 |
+| Variable               | Default          | Description                                           |
+| ---------------------- | ---------------- | ----------------------------------------------------- |
+| `TELEGRAM_APP_ID`      | required         | Integer app id from my.telegram.org                   |
+| `TELEGRAM_APP_HASH`    | required         | App hash from my.telegram.org                         |
+| `CLIENT_TOKEN`         | required, client | Token of the client bot                               |
+| `SERVER_TOKEN`         | required, server | Token of the server bot                               |
+| `CHAT_ID`              | required         | Chat id of the shared channel                         |
+| `SOCKS5_ADDR`          | `127.0.0.1:1080` | Address the client's SOCKS5 proxy listens on          |
+| `SESSION_IDLE_TIMEOUT` | `60s`            | Go duration after which an idle session is closed     |
+| `LOG_LEVEL`            | `info`           | One of `debug`, `info`, `warn` or `error`             |
 
-## Docker images
+## Docker
 
-Two pre-built images per release, published to GHCR:
+Every release publishes ghcr.io/xsaveopt/msg-proxy/server and ghcr.io/xsaveopt/msg-proxy/client for linux/amd64.
+A release like v1.2.3 is tagged 1.2.3, 1.2 and 1, and also latest unless it is a pre-release such as 1.2.3-rc1, while the dev tag is rebuilt from every commit to main.
 
-- `ghcr.io/xsaveopt/msg-proxy/server`
-- `ghcr.io/xsaveopt/msg-proxy/client`
-
-### Tags
-
-`latest` for the latest stable release. `1`, `1.2`, `1.2.3` to pin to a major, minor, or patch line. Pre-releases like `1.2.3-rc1` are never tagged `latest`. `dev` tracks the tip of the `main` branch (rebuilt on every commit) and is the easiest tag to use for testing without waiting for a release. Images are built for `linux/amd64`.
-
-**Run the server via Docker:**
-
-```bash
+```sh
 docker run --rm \
-  -e TELEGRAM_APP_ID=<api-id> \
-  -e TELEGRAM_APP_HASH=<api-hash> \
-  -e SERVER_TOKEN=<server-bot-token> \
-  -e CHAT_ID=<channel-id> \
+  -e TELEGRAM_APP_ID={api-id} \
+  -e TELEGRAM_APP_HASH={api-hash} \
+  -e SERVER_TOKEN={server-bot-token} \
+  -e CHAT_ID={chat-id} \
   ghcr.io/xsaveopt/msg-proxy/server:latest
 ```
 
-**Build images locally** (requires [ko](https://ko.build)):
-
-```bash
-make images          # loads into local Docker daemon
-```
-
-## Performance
-
-Throughput is capped by [Telegram's bot rate limit](https://core.telegram.org/bots/faq#my-bot-is-hitting-limits-how-do-i-avoid-this) of **20 messages per minute per bot per chat**. With the maximum safe payload size per message (~2900 bytes after zstd compression), the practical ceiling is around **850 bytes/second** downstream. Latency for connection establishment is ~150–200 ms (one Telegram round-trip for the handshake).
-
-This makes msg-proxy suitable for low-bandwidth use cases (API calls, shell sessions, small file transfers) rather than streaming or large downloads.
+With [ko](https://ko.build) installed, `make images` builds both images into the local Docker daemon.
 
 ## Development
 
-```bash
-make test   # run tests
-make lint   # go vet
-make clean  # remove binaries
-```
+`make test` runs the tests with the race detector, `make lint` runs go vet and `make clean` removes bin.
+CI additionally runs golangci-lint with the settings in .golangci.yml.
+
+## License
+
+GPL-2.0, see LICENSE.

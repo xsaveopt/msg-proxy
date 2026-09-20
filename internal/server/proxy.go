@@ -13,7 +13,6 @@ import (
 	"msg-proxy/internal/reliable"
 	"msg-proxy/internal/session"
 	"msg-proxy/internal/stats"
-	"msg-proxy/internal/transport"
 )
 
 type connState struct {
@@ -21,8 +20,13 @@ type connState struct {
 	cancel context.CancelFunc
 }
 
+type Bot interface {
+	reliable.Sender
+	StartReceiver(ctx context.Context) <-chan *protocol.Packet
+}
+
 type Proxy struct {
-	bot     *transport.Bot
+	bot     Bot
 	manager *session.Manager
 	logger  *slog.Logger
 
@@ -30,7 +34,7 @@ type Proxy struct {
 	states map[string]*connState
 }
 
-func New(bot *transport.Bot, logger *slog.Logger) *Proxy {
+func New(bot Bot, logger *slog.Logger) *Proxy {
 	return &Proxy{
 		bot:     bot,
 		manager: session.NewManager(),

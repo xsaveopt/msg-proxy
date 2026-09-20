@@ -14,6 +14,7 @@ import (
 	"github.com/gotd/contrib/middleware/floodwait"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/tg"
 )
@@ -46,7 +47,78 @@ func NewBot(token string, appID int, appHash string, chatID int64, logger *slog.
 	mtpChannelID := -(chatID + 1000000000000)
 
 	disp := tg.NewUpdateDispatcher()
-	disp.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, u *tg.UpdateNewChannelMessage) error {
+	disp.OnNewChannelMessage(b.onNewChannelMessage(mtpChannelID))
+
+	client := telegram.NewClient(appID, appHash, telegram.Options{
+		SessionStorage: new(session.StorageMemory),
+		UpdateHandler:  disp,
+		Middlewares:    []telegram.Middleware{floodwait.NewSimpleWaiter()},
+	})
+
+	ready := make(chan error, 1)
+	go func() {
+		err := client.Run(runCtx, func(ctx context.Context) error {
+			if err := b.setup(ctx, client.Auth(), client.Self, client.API(), token, chatID); err != nil {
+				ready <- err
+				return err
+			}
+			ready <- nil
+
+			<-ctx.Done()
+			return nil
+		})
+		if err != nil && !errors.Is(err, context.Canceled) {
+			b.logger.Error("client run error", "err", err)
+			select {
+			case ready <- err:
+			default:
+			}
+		}
+	}()
+
+	if err := <-ready; err != nil {
+		cancel()
+		return nil, err
+	}
+
+	b.queue = NewSendQueue(b.rawSend)
+	return b, nil
+}
+
+type authClient interface {
+	Status(ctx context.Context) (*auth.Status, error)
+	Bot(ctx context.Context, token string) (*tg.AuthAuthorization, error)
+}
+
+func (b *Bot) setup(ctx context.Context, ac authClient, self func(context.Context) (*tg.User, error), api *tg.Client, token string, chatID int64) error {
+	status, err := ac.Status(ctx)
+	if err != nil {
+		return fmt.Errorf("auth status: %w", err)
+	}
+	if !status.Authorized {
+		if _, err := ac.Bot(ctx, token); err != nil {
+			return fmt.Errorf("bot auth: %w", err)
+		}
+	}
+
+	user, err := self(ctx)
+	if err != nil {
+		return fmt.Errorf("get self: %w", err)
+	}
+	b.selfID = user.ID
+	b.logger.Info("authenticated", "bot", user.Username)
+
+	peer, err := resolvePeer(ctx, api, chatID)
+	if err != nil {
+		return fmt.Errorf("resolve peer: %w", err)
+	}
+	b.api = api
+	b.peer = peer
+	return nil
+}
+
+func (b *Bot) onNewChannelMessage(mtpChannelID int64) func(context.Context, tg.Entities, *tg.UpdateNewChannelMessage) error {
+	return func(_ context.Context, _ tg.Entities, u *tg.UpdateNewChannelMessage) error {
 		msg, ok := u.Message.(*tg.Message)
 		if !ok || msg.Message == "" {
 			return nil
@@ -74,66 +146,7 @@ func NewBot(token string, appID int, appHash string, chatID int64, logger *slog.
 			b.logger.Warn("update channel full, dropping packet")
 		}
 		return nil
-	})
-
-	client := telegram.NewClient(appID, appHash, telegram.Options{
-		SessionStorage: new(session.StorageMemory),
-		UpdateHandler:  disp,
-		Middlewares:    []telegram.Middleware{floodwait.NewSimpleWaiter()},
-	})
-
-	ready := make(chan error, 1)
-	go func() {
-		err := client.Run(runCtx, func(ctx context.Context) error {
-			status, err := client.Auth().Status(ctx)
-			if err != nil {
-				ready <- fmt.Errorf("auth status: %w", err)
-				return err
-			}
-			if !status.Authorized {
-				if _, err := client.Auth().Bot(ctx, token); err != nil {
-					ready <- fmt.Errorf("bot auth: %w", err)
-					return err
-				}
-			}
-
-			self, err := client.Self(ctx)
-			if err != nil {
-				ready <- fmt.Errorf("get self: %w", err)
-				return err
-			}
-			b.selfID = self.ID
-			b.logger.Info("authenticated", "bot", self.Username)
-
-			api := client.API()
-			peer, err := resolvePeer(ctx, api, chatID)
-			if err != nil {
-				ready <- fmt.Errorf("resolve peer: %w", err)
-				return err
-			}
-			b.api = api
-			b.peer = peer
-			ready <- nil
-
-			<-ctx.Done()
-			return nil
-		})
-		if err != nil && !errors.Is(err, context.Canceled) {
-			b.logger.Error("client run error", "err", err)
-			select {
-			case ready <- err:
-			default:
-			}
-		}
-	}()
-
-	if err := <-ready; err != nil {
-		cancel()
-		return nil, err
 	}
-
-	b.queue = NewSendQueue(b.rawSend)
-	return b, nil
 }
 
 func (b *Bot) SendAsync(ctx context.Context, p *protocol.Packet) error {

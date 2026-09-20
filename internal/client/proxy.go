@@ -14,20 +14,29 @@ import (
 	"msg-proxy/internal/session"
 	"msg-proxy/internal/socks5"
 	"msg-proxy/internal/stats"
-	"msg-proxy/internal/transport"
 )
 
-type Proxy struct {
-	bot     *transport.Bot
-	manager *session.Manager
-	logger  *slog.Logger
+type Bot interface {
+	reliable.Sender
+	StartReceiver(ctx context.Context) <-chan *protocol.Packet
 }
 
-func New(bot *transport.Bot, logger *slog.Logger) *Proxy {
+const ackTimeout = 15 * time.Second
+
+type Proxy struct {
+	bot     Bot
+	manager *session.Manager
+	logger  *slog.Logger
+
+	ackTimeout time.Duration
+}
+
+func New(bot Bot, logger *slog.Logger) *Proxy {
 	return &Proxy{
-		bot:     bot,
-		manager: session.NewManager(),
-		logger:  logger,
+		bot:        bot,
+		manager:    session.NewManager(),
+		logger:     logger,
+		ackTimeout: ackTimeout,
 	}
 }
 
@@ -108,7 +117,7 @@ func (p *Proxy) handleConnect(conn net.Conn, req socks5.ConnectRequest) {
 		return
 	}
 
-	ackCtx, ackCancel := context.WithTimeout(ctx, 15*time.Second)
+	ackCtx, ackCancel := context.WithTimeout(ctx, p.ackTimeout)
 	defer ackCancel()
 
 	var ackPkt *protocol.Packet

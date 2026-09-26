@@ -68,10 +68,7 @@ func (p *Proxy) receiveLoop(ctx context.Context, packets <-chan *protocol.Packet
 				continue
 			}
 			sess.Touch()
-			select {
-			case sess.Incoming <- pkt:
-			case <-sess.Done():
-			case <-ctx.Done():
+			if err := sess.Enqueue(ctx, pkt); err != nil {
 				return
 			}
 		case <-ctx.Done():

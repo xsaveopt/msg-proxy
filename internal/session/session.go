@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ type Session struct {
 	once     sync.Once
 	LastSeen time.Time
 	mu       sync.Mutex
+	inMu     sync.RWMutex
 }
 
 func New(id string) *Session {
@@ -47,8 +49,23 @@ func (s *Session) Close() {
 		s.State = StateClosed
 		s.mu.Unlock()
 		close(s.done)
+		s.inMu.Lock()
 		close(s.Incoming)
+		s.inMu.Unlock()
 	})
+}
+
+func (s *Session) Enqueue(ctx context.Context, pkt *protocol.Packet) error {
+	s.inMu.RLock()
+	defer s.inMu.RUnlock()
+	select {
+	case s.Incoming <- pkt:
+		return nil
+	case <-s.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Session) Touch() {

@@ -135,6 +135,7 @@ func (s *Stream) deliverData(ctx context.Context, pkt *protocol.Packet) {
 
 	s.recvBuf[seq] = data
 
+	firstSeq := s.nextExpect
 	var ready [][]byte
 	for {
 		chunk, ok := s.recvBuf[s.nextExpect]
@@ -153,12 +154,20 @@ func (s *Stream) deliverData(ctx context.Context, pkt *protocol.Packet) {
 	}
 	s.recvMu.Unlock()
 
-	for _, chunk := range ready {
+	for i, chunk := range ready {
 		select {
 		case s.readyCh <- chunk:
 		case <-s.stopCh:
 			return
 		case <-ctx.Done():
+			s.recvMu.Lock()
+			for j := i; j < len(ready); j++ {
+				s.recvBuf[firstSeq+uint32(j)] = ready[j]
+			}
+			if s.nextExpect > firstSeq+uint32(i) {
+				s.nextExpect = firstSeq + uint32(i)
+			}
+			s.recvMu.Unlock()
 			return
 		}
 	}

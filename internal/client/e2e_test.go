@@ -37,6 +37,7 @@ type linkBot struct {
 	inbox chan *protocol.Packet
 	done  chan struct{}
 	once  sync.Once
+	fault func(p *protocol.Packet, push func(*protocol.Packet) error) error
 }
 
 func newLinkPair() (*linkBot, *linkBot) {
@@ -59,8 +60,15 @@ func (l *linkBot) deliver(p *protocol.Packet) error {
 	if err != nil {
 		return err
 	}
+	if l.fault != nil {
+		return l.fault(clone, l.push)
+	}
+	return l.push(clone)
+}
+
+func (l *linkBot) push(p *protocol.Packet) error {
 	select {
-	case l.peer.inbox <- clone:
+	case l.peer.inbox <- p:
 		return nil
 	case <-l.done:
 		return errors.New("bot stopped")
@@ -151,8 +159,13 @@ func freeAddr(t *testing.T) string {
 
 func startTunnel(t *testing.T) string {
 	t.Helper()
-
 	clientBot, serverBot := newLinkPair()
+	return startTunnelOver(t, clientBot, serverBot)
+}
+
+func startTunnelOver(t *testing.T, clientBot, serverBot *linkBot) string {
+	t.Helper()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	srv := server.New(serverBot, e2eLogger())

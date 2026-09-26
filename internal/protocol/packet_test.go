@@ -2,6 +2,8 @@ package protocol
 
 import (
 	"bytes"
+	"math"
+	"math/rand"
 	"strings"
 	"testing"
 )
@@ -117,4 +119,60 @@ func TestConnectPacket(t *testing.T) {
 		t.Errorf("round-trip mismatch: got %+v, want %+v", decoded, p)
 	}
 	_ = strings.ToUpper
+}
+
+const telegramMessageLimit = 4096
+
+func TestWorstCaseDataPacketFitsTelegramMessage(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	for i := 0; i < 20; i++ {
+		chunk := make([]byte, MaxPayloadBytes)
+		if _, err := rng.Read(chunk); err != nil {
+			t.Fatalf("generate chunk: %v", err)
+		}
+		encoded, err := Encode(&Packet{
+			SessionID: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+			Seq:       math.MaxUint32,
+			Type:      TypeData,
+			Payload:   EncodePayload(chunk),
+		})
+		if err != nil {
+			t.Fatalf("Encode: %v", err)
+		}
+		if len(encoded) >= telegramMessageLimit {
+			t.Fatalf("incompressible %d-byte chunk encodes to %d chars, want under %d", MaxPayloadBytes, len(encoded), telegramMessageLimit)
+		}
+	}
+}
+
+func TestDecodePayloadErrors(t *testing.T) {
+	cases := map[string]struct {
+		input string
+		want  string
+	}{
+		"invalid base64":      {input: "***", want: "base64"},
+		"base64 but not zstd": {input: "aGVsbG8gd29ybGQ=", want: "zstd"},
+		"truncated zstd":      {input: EncodePayload(bytes.Repeat([]byte("abc"), 100))[:12], want: "zstd"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := DecodePayload(tc.input)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q should mention %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+func TestDecodePayloadEmpty(t *testing.T) {
+	data, err := DecodePayload(EncodePayload(nil))
+	if err != nil {
+		t.Fatalf("DecodePayload: %v", err)
+	}
+	if len(data) != 0 {
+		t.Errorf("got %d bytes, want 0", len(data))
+	}
 }

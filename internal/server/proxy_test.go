@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -371,5 +372,54 @@ func TestRunClosesTunnelWhenTargetHangsUp(t *testing.T) {
 	if closePkt := waitPacket(t, bot.sent, protocol.TypeClose); closePkt.SessionID != "s1" {
 		t.Errorf("CLOSE session: got %q, want %q", closePkt.SessionID, "s1")
 	}
+	waitStates(t, p, 0)
+}
+
+func TestReapedSessionClosesTargetConnection(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		accepted <- conn
+	}()
+
+	bot := newFakeBot()
+	p := startProxy(t, bot)
+
+	bot.inbox <- &protocol.Packet{SessionID: "s1", Type: protocol.TypeConnect, Target: ln.Addr().String()}
+	waitPacket(t, bot.sent, protocol.TypeAck)
+	waitStates(t, p, 1)
+
+	var target net.Conn
+	select {
+	case target = <-accepted:
+	case <-time.After(waitTimeout):
+		t.Fatal("target was never dialled")
+	}
+	t.Cleanup(func() { _ = target.Close() })
+
+	time.Sleep(time.Millisecond)
+	p.manager.Reap(0)
+
+	if err := target.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set deadline: %v", err)
+	}
+	_, err = target.Read(make([]byte, 1))
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		t.Fatal("the target connection stayed open after the session was reaped")
+	}
+	if err == nil {
+		t.Fatal("unexpected data on the target connection")
+	}
+
 	waitStates(t, p, 0)
 }

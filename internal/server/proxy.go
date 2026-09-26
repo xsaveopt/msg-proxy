@@ -151,7 +151,10 @@ func (p *Proxy) handleConnect(ctx context.Context, pkt *protocol.Packet) {
 			p.writeToTCP(connCtx, conn, stream, logger)
 		}()
 
-		<-done
+		select {
+		case <-done:
+		case <-sess.Done():
+		}
 	}()
 }
 

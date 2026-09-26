@@ -11,15 +11,18 @@ const (
 	queueCap     = 512
 	workers      = 1
 	sendInterval = 3000 * time.Millisecond
+	maxRetries   = 5
+	retryBackoff = 50 * time.Millisecond
 )
 
 var ErrQueueFull = errors.New("send queue full")
 
 type sendJob struct {
-	text   string
-	err    chan error
-	onSent func()
-	urgent bool
+	text     string
+	err      chan error
+	onSent   func()
+	urgent   bool
+	attempts int
 }
 
 type SendQueue struct {
@@ -45,6 +48,9 @@ func NewSendQueue(sendFn func(text string) error) *SendQueue {
 
 func (sq *SendQueue) Enqueue(text string) error {
 	job := sendJob{text: text, urgent: true}
+	if sq.stopped() {
+		return errors.New("queue stopped")
+	}
 	select {
 	case sq.q <- job:
 		return nil
@@ -55,6 +61,9 @@ func (sq *SendQueue) Enqueue(text string) error {
 
 func (sq *SendQueue) EnqueueAsync(ctx context.Context, text string) error {
 	job := sendJob{text: text}
+	if sq.stopped() {
+		return errors.New("queue stopped")
+	}
 	select {
 	case sq.q <- job:
 		return nil
@@ -67,6 +76,9 @@ func (sq *SendQueue) EnqueueAsync(ctx context.Context, text string) error {
 
 func (sq *SendQueue) EnqueueAsyncCallback(ctx context.Context, text string, onSent func()) error {
 	job := sendJob{text: text, onSent: onSent}
+	if sq.stopped() {
+		return errors.New("queue stopped")
+	}
 	select {
 	case sq.q <- job:
 		return nil
@@ -93,6 +105,15 @@ func (sq *SendQueue) EnqueueWait(ctx context.Context, text string) error {
 		return ctx.Err()
 	case <-sq.stopCh:
 		return errors.New("queue stopped")
+	}
+}
+
+func (sq *SendQueue) stopped() bool {
+	select {
+	case <-sq.stopCh:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -132,6 +153,20 @@ func (sq *SendQueue) worker() {
 
 func (sq *SendQueue) dispatch(job sendJob) {
 	err := sq.sendFn(job.text)
+	if err != nil && job.err == nil {
+		if job.attempts >= maxRetries {
+			return
+		}
+		job.attempts++
+		time.AfterFunc(retryBackoff<<(job.attempts-1), func() {
+			select {
+			case sq.retry <- job:
+			case <-sq.stopCh:
+			default:
+			}
+		})
+		return
+	}
 	if err == nil && job.onSent != nil {
 		job.onSent()
 	}

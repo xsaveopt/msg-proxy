@@ -162,6 +162,29 @@ func TestEnqueueAsyncCallbackRetriesAfterSendFailure(t *testing.T) {
 	}
 }
 
+func TestEnqueueStopsRetryingAfterCap(t *testing.T) {
+	var calls atomic.Int32
+	sq := NewSendQueue(func(string) error {
+		calls.Add(1)
+		return errors.New("rate limited")
+	})
+	defer sq.Stop()
+
+	if err := sq.Enqueue("never-sent"); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	want := int32(1 + maxRetries)
+	deadline := time.Now().Add(retryBackoff<<maxRetries + time.Second)
+	for time.Now().Before(deadline) && calls.Load() < want {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(retryBackoff << maxRetries)
+	if got := calls.Load(); got != want {
+		t.Errorf("send attempts: got %d, want %d", got, want)
+	}
+}
+
 func TestEnqueueWaitReturnsSendErrorWithoutRetry(t *testing.T) {
 	var calls atomic.Int32
 	sq := NewSendQueue(func(string) error {

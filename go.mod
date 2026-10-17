@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gotd/contrib v0.25.0
 	github.com/gotd/td v0.162.0
-	github.com/klauspost/compress v1.20.1
+	github.com/klauspost/compress v1.20.3
 )
 
 require (

@@ -4,9 +4,9 @@ go 1.26.4
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/gotd/contrib v0.25.0
-	github.com/gotd/td v0.162.0
-	github.com/klauspost/compress v1.20.1
+	github.com/gotd/contrib v0.26.0
+	github.com/gotd/td v0.164.0
+	github.com/klauspost/compress v1.20.4
 )
 
 require (
@@ -31,9 +31,9 @@ require (
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/yuin/goldmark v1.8.5 // indirect
-	go.opentelemetry.io/otel v1.44.0 // indirect
-	go.opentelemetry.io/otel/metric v1.44.0 // indirect
-	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	go.opentelemetry.io/otel v1.45.0 // indirect
+	go.opentelemetry.io/otel/metric v1.45.0 // indirect
+	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
